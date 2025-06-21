@@ -1,10 +1,9 @@
 package com.hun3.service;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.hun3.domain.Stock;
 import com.hun3.repository.StockRepository;
-import com.hun3.service.StockService;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -17,7 +16,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @Slf4j
 @SpringBootTest
-class StockServiceTest {
+public class OptimisticLockStockServiceTest {
+
     @Autowired
     private OptimisticLockStockService stockService;
 
@@ -35,25 +35,20 @@ class StockServiceTest {
     }
 
     @Test
-    void decrease_stock_one_try() {
+    public void update_failed() throws InterruptedException {
+        final Long productId = 1L;
+        final Long decreaseAmount = 1L;
+        final int threadCount = 2;
 
-        stockService.decrease(1L, 1L);
-
-        Stock stock = stockRepository.findByProductId(1L);
-        assertEquals(99, stock.getQuantity());
-    }
-
-    @Test
-    void decrease_stock_100_times_concurrently() throws InterruptedException {
-
-        int threadCount = 100;
-        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
-        CountDownLatch latch = new CountDownLatch(threadCount);
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+        CountDownLatch latch = new CountDownLatch(2);
 
         for (int i = 0; i < threadCount; i++) {
             executorService.submit(() -> {
                try {
-                   stockService.decrease(1L, 1L);
+                   stockService.decrease(productId, decreaseAmount);
+               } catch(RuntimeException e) {
+                   log.error("{} 발생, 업데이트 실패", e.getClass().getSimpleName(), e);
                } finally {
                    latch.countDown();
                }
@@ -61,8 +56,8 @@ class StockServiceTest {
         }
 
         latch.await();
-
-        Stock stock = stockRepository.findByProductId(1L);
-        assertEquals(0, stock.getQuantity());
+        Stock stock = stockRepository.findByProductId(productId);
+        assertEquals(98, stock.getQuantity());
     }
+
 }

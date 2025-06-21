@@ -1,10 +1,9 @@
-package com.hun3.service;
+package com.hun3.facade;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.hun3.domain.Stock;
 import com.hun3.repository.StockRepository;
-import com.hun3.service.StockService;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -17,9 +16,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @Slf4j
 @SpringBootTest
-class StockServiceTest {
+public class OptimisticLockStockFacadeTest {
+
     @Autowired
-    private OptimisticLockStockService stockService;
+    private OptimisticLockStockFacade optimisticLockStockFacade;
 
     @Autowired
     private StockRepository stockRepository;
@@ -35,34 +35,27 @@ class StockServiceTest {
     }
 
     @Test
-    void decrease_stock_one_try() {
-
-        stockService.decrease(1L, 1L);
-
-        Stock stock = stockRepository.findByProductId(1L);
-        assertEquals(99, stock.getQuantity());
-    }
-
-    @Test
-    void decrease_stock_100_times_concurrently() throws InterruptedException {
+    public void decrease_stock_100_times_concurrently() throws InterruptedException {
 
         int threadCount = 100;
-        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
         CountDownLatch latch = new CountDownLatch(threadCount);
 
         for (int i = 0; i < threadCount; i++) {
             executorService.submit(() -> {
-               try {
-                   stockService.decrease(1L, 1L);
-               } finally {
-                   latch.countDown();
-               }
+                try {
+                    optimisticLockStockFacade.decrease(1L, 1L);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    latch.countDown();
+                }
             });
         }
 
         latch.await();
-
         Stock stock = stockRepository.findByProductId(1L);
         assertEquals(0, stock.getQuantity());
     }
+
 }
