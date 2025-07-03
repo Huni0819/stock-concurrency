@@ -250,6 +250,47 @@ Java는 이러한 데이터베이스 락 기법을 사용할 수 있도록 `Lock
 
 ## 3. Redis Lock
 
+Redis를 활용해서 동시성 문제를 해결할 수 있다.
+`Lettuce`와 `Redisson`을 활용해 해결해 보자.
+
+### Lettuce
+
+`Lettuce`로 분산 락을 구현하는 경우 `setnx` 명령어를 활용한다.
+이 떄, Spin Lock 방식으로 구현하는데, retry 로직을 개발자가 직접 작성해야 한다.
+
+- setnx : set if not exists
+- key-value를 기준으로 기존의 값이 없는 경우 set 한다.
+
+Spin Lock
+- 스레드가 Lock을 획득하기 위해 반복적으로 시도하는 기법.
+![img.png](img/spin-lock.png)
+
+![img.png](img/lettuce.png)
+
+첫 스레드가 Lock 을 반납하기 전까지 획득에 실패하는 것을 볼 수 있다.
+
+또한 스레드가 Lock을 해제하면 다른 스레드가 락을 획득 해 동작하는 것을 볼 수 있다.
+
+하지만, Spin Lock 방식이므로 스레드가 Lock을 획득하기 위해서 계속 레디스에 요청을 보내 부하를 줄 수 있기 때문에 Thread.sleep()을 통해 Lock을 시도하는 중간에 텀을 두어야 한다.
+
+### Redisson
+
+pub-sub 기반으로 Lock을 구현한다.
+
+pub-sub
+- Lock을 관리하기 위한 채널을 생성해 Lock을 점유중인 쓰레드가 작업이 끝나면 Lock을 획득하려 대기중인 쓰레드에게 해제를 알린다.
+- 이 후 안내 받은 쓰레드가 Lock을 획득하는 시도를 한다.
+- Lettuce와 달리 별도의 Retry 로직을 작성하지 않아도 된다.
+
+![img.png](img/pub-sub.png)
+
+![img.png](img/redisson.png)
+
+Spin Lock 방식의 Lettuce와 달리 pub/sub 기반으로 레디스에 부하를 줄일 수 있다.
+하지만 구현 로직이 복잡하고, 별도의 외부 라이브러리를 사용하므로 사용법을 익혀야 한다는 부담이 존재한다.
+
+> 재시도가 필요하지 않다면 Lettuce를, 별도의 재시도 로직이 필요하다면 Redisson을 활용할 수 있다.
+
 ## Reference
 
 ---
